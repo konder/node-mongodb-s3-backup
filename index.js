@@ -1,10 +1,11 @@
 'use strict';
 
 var exec = require('child_process').exec
-  , spawn = require('child_process').spawn
-  , path = require('path')
-  , domain = require('domain')
-  , d = domain.create();
+    , spawn = require('child_process').spawn
+    , exec = require('child_process').exec
+    , path = require('path')
+    , domain = require('domain')
+    , d = domain.create();
 
 /**
  * log
@@ -15,20 +16,22 @@ var exec = require('child_process').exec
  * @param tag      (optional) the tag to log with.
  */
 function log(message, tag) {
-  var util = require('util')
-    , color = require('cli-color')
-    , tags, currentTag;
+    var util = require('util')
+        , color = require('cli-color')
+        , tags, currentTag;
 
-  tag = tag || 'info';
+    tag = tag || 'info';
 
-  tags = {
-    error: color.red.bold,
-    warn: color.yellow,
-    info: color.cyanBright
-  };
+    tags = {
+        error: color.red.bold,
+        warn: color.yellow,
+        info: color.cyanBright
+    };
 
-  currentTag = tags[tag] || function(str) { return str; };
-  util.log((currentTag("[" + tag + "] ") + message).replace(/(\n|\r|\r\n)$/, ''));
+    currentTag = tags[tag] || function (str) {
+        return str;
+    };
+    util.log((currentTag("[" + tag + "] ") + message).replace(/(\n|\r|\r\n)$/, ''));
 }
 
 /**
@@ -39,18 +42,18 @@ function log(message, tag) {
  * @param databaseName   The name of the database
  */
 function getArchiveName(databaseName) {
-  var date = new Date()
-    , datestring;
+    var date = new Date()
+        , datestring;
 
-  datestring = [
-    databaseName,
-    date.getFullYear(),
-    date.getMonth() + 1,
-    date.getDate(),
-    date.getTime()
-  ];
+    datestring = [
+        databaseName,
+        date.getFullYear(),
+            date.getMonth() + 1,
+        date.getDate(),
+        date.getTime()
+    ];
 
-  return datestring.join('_') + '.tar.gz';
+    return datestring.join('_') + '.tar.gz';
 }
 
 /* removeRF
@@ -61,17 +64,18 @@ function getArchiveName(databaseName) {
  * @param callback     callback(error)
  */
 function removeRF(target, callback) {
-  var fs = require('fs');
+    var fs = require('fs');
 
-  callback = callback || function() { };
+    callback = callback || function () {
+    };
 
-  fs.exists(target, function(exists) {
-    if (!exists) {
-      return callback(null);
-    }
-    log("Removing " + target, 'info');
-    exec( 'rm -rf ' + target, callback);
-  });
+    fs.exists(target, function (exists) {
+        if (!exists) {
+            return callback(null);
+        }
+        log("Removing " + target, 'info');
+        exec('rm -rf ' + target, callback);
+    });
 }
 
 /**
@@ -84,44 +88,104 @@ function removeRF(target, callback) {
  * @param callback   callback(err)
  */
 function mongoDump(options, directory, callback) {
-  var mongodump
-    , mongoOptions;
+    var mongodump
+        , mongoOptions;
 
-  callback = callback || function() { };
+    callback = callback || function () {
+    };
 
-  mongoOptions= [
-    '-h', options.host + ':' + options.port,
-    '-d', options.db,
-    '-o', directory
-  ];
+    mongoOptions = [
+        '-h', options.host + ':' + options.port,
+    ];
 
-  if(options.username && options.password) {
-    mongoOptions.push('-u');
-    mongoOptions.push(options.username);
-
-    mongoOptions.push('-p');
-    mongoOptions.push(options.password);
-  }
-
-  log('Starting mongodump of ' + options.db, 'info');
-  mongodump = spawn('mongodump', mongoOptions);
-
-  mongodump.stdout.on('data', function (data) {
-    log(data);
-  });
-
-  mongodump.stderr.on('data', function (data) {
-    log(data, 'error');
-  });
-
-  mongodump.on('exit', function (code) {
-    if(code === 0) {
-      log('mongodump executed successfully', 'info');
-      callback(null);
+    if (options.db && options.db != 'all') {
+        mongoOptions.push('-o');
+        mongoOptions.push(options.db);
     } else {
-      callback(new Error("Mongodump exited with code " + code));
+        directory = directory + '/all/';
     }
-  });
+    mongoOptions.push('-o');
+    mongoOptions.push(directory);
+
+    if (options.username && options.password) {
+        mongoOptions.push('-u');
+        mongoOptions.push(options.username);
+
+        mongoOptions.push('-p');
+        mongoOptions.push(options.password);
+    }
+
+    log('Starting mongodump of ' + options.db, 'info');
+    mongodump = spawn('mongodump', mongoOptions);
+
+    mongodump.stdout.on('data', function (data) {
+        log(data);
+    });
+
+    mongodump.stderr.on('data', function (data) {
+        log(data, 'error');
+    });
+
+    mongodump.on('exit', function (code) {
+        if (code === 0) {
+            log('mongodump executed successfully', 'info');
+            callback(null);
+        } else {
+            callback(new Error("Mongodump exited with code " + code));
+        }
+    });
+}
+
+/**
+ * mysqlDump
+ *
+ * Calls mysqldump on a specified database.
+ *
+ * @param options    MysqlDB connection options [host, port, username, password, db]
+ * @param directory  Directory to dump the database to
+ * @param callback   callback(err)
+ */
+function mysqlDump(options, directory, callback) {
+    var fs = require('fs');
+
+    var mysqldump
+        , mysqlOptions;
+
+    callback = callback || function () {
+    };
+
+    mysqlOptions = ' -h ' + options.host + ' -P ' + options.port;
+    mysqlOptions += ' ' + ((options.db && options.db != 'all') ? options.db : '--all-databases');
+
+    if (options.username && options.password) {
+        mysqlOptions += ' -u ' + options.username + ' -p ' + options.password;
+    }
+
+    log('Starting mysqldump of ' + options.db, 'info');
+    if (!fs.existsSync(directory)) {
+        require('fs').mkdirSync(directory);
+    }
+
+    var cmd = 'mysqldump ' + mysqlOptions + ' > ' + directory + '/' + options.db;
+    log(cmd);
+    mysqldump = exec(cmd, {});
+
+    mysqldump.stdout.on('data', function (data) {
+        log(data);
+    });
+
+    mysqldump.stderr.on('data', function (data) {
+        log(data, 'error');
+    });
+
+    mysqldump.on('exit', function (code) {
+        if (code === 0) {
+            log('mysqldump executed successfully', 'info');
+            callback(null);
+        } else {
+            callback(new Error("Mysqldump exited with code " + code));
+        }
+    });
 }
 
 /**
@@ -135,32 +199,33 @@ function mongoDump(options, directory, callback) {
  * @param callback   callback(err)
  */
 function compressDirectory(directory, input, output, callback) {
-  var tar
-    , tarOptions;
+    var tar
+        , tarOptions;
 
-  callback = callback || function() { };
+    callback = callback || function () {
+    };
 
-  tarOptions = [
-    '-zcf',
-    output,
-    input
-  ];
+    tarOptions = [
+        '-zcf',
+        output,
+        input
+    ];
 
-  log('Starting compression of ' + input + ' into ' + output, 'info');
-  tar = spawn('tar', tarOptions, { cwd: directory });
+    log('Starting compression of ' + input + ' into ' + output, 'info');
+    tar = spawn('tar', tarOptions, { cwd: directory });
 
-  tar.stderr.on('data', function (data) {
-    log(data, 'error');
-  });
+    tar.stderr.on('data', function (data) {
+        log(data, 'error');
+    });
 
-  tar.on('exit', function (code) {
-    if(code === 0) {
-      log('successfully compress directory', 'info');
-      callback(null);
-    } else {
-      callback(new Error("Tar exited with code " + code));
-    }
-  });
+    tar.on('exit', function (code) {
+        if (code === 0) {
+            log('successfully compress directory', 'info');
+            callback(null);
+        } else {
+            callback(new Error("Tar exited with code " + code));
+        }
+    });
 }
 
 /**
@@ -174,45 +239,46 @@ function compressDirectory(directory, input, output, callback) {
  * @param callback  callback(err)
  */
 function sendToS3(options, directory, target, callback) {
-  var knox = require('knox')
-    , sourceFile = path.join(directory, target)
-    , s3client
-    , destination = options.destination || '/'
-    , headers = {};
+    var knox = require('knox')
+        , sourceFile = path.join(directory, target)
+        , s3client
+        , destination = options.destination || '/'
+        , headers = {};
 
-  callback = callback || function() { };
+    callback = callback || function () {
+    };
 
-  // Deleting destination because it's not an explicitly named knox option
-  delete options.destination;
-  s3client = knox.createClient(options);
+    // Deleting destination because it's not an explicitly named knox option
+    delete options.destination;
+    s3client = knox.createClient(options);
 
-  if (options.encrypt)
-    headers = {"x-amz-server-side-encryption": "AES256"}
+    if (options.encrypt)
+        headers = {"x-amz-server-side-encryption": "AES256"}
 
-  log('Attemping to upload ' + target + ' to the ' + options.bucket + ' s3 bucket');
-  s3client.putFile(sourceFile, path.join(destination, target), headers, function(err, res){
-    if(err) {
-      return callback(err);
-    }
+    log('Attemping to upload ' + target + ' to the ' + options.bucket + ' s3 bucket');
+    s3client.putFile(sourceFile, path.join(destination, target), headers, function (err, res) {
+        if (err) {
+            return callback(err);
+        }
 
-    res.setEncoding('utf8');
+        res.setEncoding('utf8');
 
-    res.on('data', function(chunk){
-      if(res.statusCode !== 200) {
-        log(chunk, 'error');
-      } else {
-        log(chunk);
-      }
+        res.on('data', function (chunk) {
+            if (res.statusCode !== 200) {
+                log(chunk, 'error');
+            } else {
+                log(chunk);
+            }
+        });
+
+        res.on('end', function (chunk) {
+            if (res.statusCode !== 200) {
+                return callback(new Error('Expected a 200 response from S3, got ' + res.statusCode));
+            }
+            log('Successfully uploaded to s3');
+            return callback();
+        });
     });
-
-    res.on('end', function(chunk) {
-      if (res.statusCode !== 200) {
-        return callback(new Error('Expected a 200 response from S3, got ' + res.statusCode));
-      }
-      log('Successfully uploaded to s3');
-      return callback();
-    });
-  });
 }
 
 /**
@@ -225,44 +291,118 @@ function sendToS3(options, directory, target, callback) {
  * @param s3Config        s3 config [key, secret, bucket]
  * @param callback        callback(err)
  */
-function sync(mongodbConfig, s3Config, callback) {
-  var tmpDir = path.join(require('os').tmpDir(), 'mongodb_s3_backup')
-    , backupDir = path.join(tmpDir, mongodbConfig.db)
-    , archiveName = getArchiveName(mongodbConfig.db)
-    , async = require('async')
-    , tmpDirCleanupFns;
+function syncMongo(mongodbConfig, s3Config, callback) {
+    mongodbConfig.dbs = mongodbConfig.dbs || ['all'];
 
-  callback = callback || function() { };
+    mongodbConfig.dbs.forEach(function (db) {
+        var tmpDir = path.join(require('os').tmpDir(), 'mongodb_s3_backup')
+            , backupDir = path.join(tmpDir, db)
+            , archiveName = getArchiveName(db)
+            , async = require('async')
+            , tmpDirCleanupFns;
 
-  tmpDirCleanupFns = [
-    async.apply(removeRF, backupDir),
-    async.apply(removeRF, path.join(tmpDir, archiveName))
-  ];
+        callback = callback || function () {
+        };
 
-  async.series(tmpDirCleanupFns.concat([
-    async.apply(mongoDump, mongodbConfig, tmpDir),
-    async.apply(compressDirectory, tmpDir, mongodbConfig.db, archiveName),
-    d.bind(async.apply(sendToS3, s3Config, tmpDir, archiveName)) // this function sometimes throws EPIPE errors
-  ]), function(err) {
-    if(err) {
-      log(err, 'error');
-    } else {
-      log('Successfully backed up ' + mongodbConfig.db);
-    }
-    // cleanup folders
-    async.series(tmpDirCleanupFns, function() {
-      return callback(err);
+        tmpDirCleanupFns = [
+            async.apply(removeRF, backupDir),
+            async.apply(removeRF, path.join(tmpDir, archiveName))
+        ];
+
+        async.series(tmpDirCleanupFns.concat([
+            async.apply(mongoDump, {
+                host: mongodbConfig.host,
+                port: mongodbConfig.port,
+                username: mongodbConfig.username,
+                password: mongodbConfig.password,
+                db: db
+            }, tmpDir),
+            async.apply(compressDirectory, tmpDir, db, archiveName),
+            d.bind(async.apply(sendToS3, s3Config, tmpDir, archiveName)) // this function sometimes throws EPIPE errors
+        ]), function (err) {
+            if (err) {
+                log(err, 'error');
+            } else {
+                log('Successfully backed up ' + db);
+            }
+            // cleanup folders
+            async.series(tmpDirCleanupFns, function () {
+                return callback(err);
+            });
+        });
+
+        // this cleans up folders in case of EPIPE error from AWS connection
+        d.on('error', function (err) {
+            d.exit();
+            async.series(tmpDirCleanupFns, function () {
+                throw(err);
+            });
+        });
     });
-  });
-
-  // this cleans up folders in case of EPIPE error from AWS connection
-  d.on('error', function(err) {
-      d.exit()
-      async.series(tmpDirCleanupFns, function() {
-        throw(err);
-      });
-  });
-
 }
 
-module.exports = { sync: sync, log: log };
+/**
+ * sync
+ *
+ * Performs a mysqldump on a specified database, gzips the data,
+ * and uploads it to s3.
+ *
+ * @param mysqlConfig   mysqldb config [host, port, username, password, db]
+ * @param s3Config        s3 config [key, secret, bucket]
+ * @param callback        callback(err)
+ */
+function syncMySQL(mysqlConfig, s3Config, callback) {
+    mysqlConfig.dbs = mysqlConfig.dbs || ['all'];
+
+    mysqlConfig.dbs.forEach(function (db) {
+        if (db.indexOf(';') > -1) {
+            return;
+        }
+
+        var tmpDir = path.join(require('os').tmpDir(), 'mysql_s3_backup')
+            , backupDir = path.join(tmpDir, db)
+            , archiveName = getArchiveName(db)
+            , async = require('async')
+            , tmpDirCleanupFns;
+
+        callback = callback || function () {
+        };
+
+        tmpDirCleanupFns = [
+            async.apply(removeRF, backupDir),
+            async.apply(removeRF, path.join(tmpDir, archiveName))
+        ];
+
+        async.series(tmpDirCleanupFns.concat([
+            async.apply(mysqlDump, {
+                host: mysqlConfig.host,
+                port: mysqlConfig.port,
+                username: mysqlConfig.username,
+                password: mysqlConfig.password,
+                db: db
+            }, tmpDir),
+            async.apply(compressDirectory, tmpDir, db, archiveName),
+            d.bind(async.apply(sendToS3, s3Config, tmpDir, archiveName)) // this function sometimes throws EPIPE errors
+        ]), function (err) {
+            if (err) {
+                log(err, 'error');
+            } else {
+                log('Successfully backed up ' + db);
+            }
+            // cleanup folders
+            async.series(tmpDirCleanupFns, function () {
+                return callback(err);
+            });
+        });
+
+        // this cleans up folders in case of EPIPE error from AWS connection
+        d.on('error', function (err) {
+            d.exit();
+            async.series(tmpDirCleanupFns, function () {
+                throw(err);
+            });
+        });
+    });
+}
+
+module.exports = { syncMongo: syncMongo, syncMySQL: syncMySQL, log: log };
